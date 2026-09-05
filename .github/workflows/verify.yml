@@ -1,0 +1,26 @@
+name: Verify app
+
+# Unit tests against a mocked SendBeam API, then Zapier's own schema
+# validation — the same check `zapier push` runs before accepting a build.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run validate
