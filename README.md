@@ -52,32 +52,6 @@ One thing to know when adding an action: Zapier's request client blanks any `{{c
 object body, treating it as an unresolved Zap field. `jsonBody()` in `src/api.js` pre-serialises the body so
 SendBeam merge tags survive; use it for anything that carries user-written email content.
 
-## Publishing
-
-Done once by whoever owns the SendBeam developer account on Zapier (any Zapier login works; the app is tied to
-that account, so use a shared team login rather than a personal one).
-
-```bash
-npm i -g zapier-platform-cli
-zapier login                                  # creates ~/.zapierrc
-zapier register "SendBeam"                    # first time only — writes .zapierapprc (git-ignored)
-                                              # audience: Global, role: Employee, category: Email Newsletters
-zapier test && zapier validate
-zapier push                                   # uploads 1.0.0 as a private version
-```
-
-Then, in the Zapier developer platform (<https://developer.zapier.com>):
-
-1. **Test it end to end** — make a Zap with each trigger and action against a real workspace.
-2. **Invite users** while private: Manage → Sharing gives an invite link; anyone with it can use the app now.
-3. **Submit for publishing** (Publish → Submit). Zapier's review needs: the app's description and logo (256×256
-   PNG), a test account for the reviewer (a SendBeam workspace with an API key), at least three live Zaps using
-   different triggers/actions, and the checks `zapier validate` runs with `--without-style` removed. Reviews
-   take one to three weeks; when approved the app is public in Zapier's directory and gets an integration page.
-
-Each later release: bump `version` in `package.json`, `zapier push`, test, then `zapier promote x.y.z` and
-`zapier migrate old new` to move existing Zaps.
-
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
