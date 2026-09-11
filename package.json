@@ -1,12 +1,17 @@
 {
   "name": "sendbeam-zapier",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "SendBeam integration for Zapier: triggers on new subscribers, unsubscribes and form submissions; actions to add contacts, lists, tags and send email.",
   "main": "index.js",
   "private": true,
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/sendbeam-io/sendbeam-zapier" },
-  "engines": { "node": ">=18" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sendbeam-io/sendbeam-zapier"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "test": "jest --testTimeout 10000",
     "validate": "zapier-platform validate",
