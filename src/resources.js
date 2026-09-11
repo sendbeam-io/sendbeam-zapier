@@ -1,58 +1,30 @@
 'use strict';
 
 /**
- * Lists and tags as resources, so actions can offer them as dropdowns
- * (`dynamic: 'list.id.name'`).
+ * Dropdown sources. Each resource's `list` becomes a hidden trigger that
+ * fields use as `dynamic: '<key>.id.name'`.
  */
 
-const { BASE_URL, check } = require('./api');
+const { getAll, listAll } = require('./api');
+const samples = require('./triggers/samples');
 
-const list = {
-  key: 'list',
-  noun: 'List',
+const dropdown = ({ key, noun, label, sample, load }) => ({
+  key,
+  noun,
   list: {
-    display: { label: 'New List', description: 'Triggers when a list is created.', hidden: true },
+    display: { label, description: `Triggers when a ${noun.toLowerCase()} is added. Used to fill dropdowns.`, hidden: true },
     operation: {
-      perform: async (z) => {
-        const response = await z.request({ url: `${BASE_URL}/lists`, skipThrowForStatus: true });
-        check(z, response, 'Listing lists');
-        return (response.data.lists || []).map((l) => ({ id: l.id, name: l.name }));
-      },
-      sample: { id: '9c2b1a0f-1111-4222-8333-444455556666', name: 'Product updates' },
+      perform: async (z) => (await load(z)).map((row) => ({ id: row.id, name: row.name })),
+      sample: { id: sample.id, name: sample.name },
     },
   },
-};
+});
 
-const tag = {
-  key: 'tag',
-  noun: 'Tag',
-  list: {
-    display: { label: 'New Tag', description: 'Triggers when a tag is created.', hidden: true },
-    operation: {
-      perform: async (z) => {
-        const response = await z.request({ url: `${BASE_URL}/tags`, skipThrowForStatus: true });
-        check(z, response, 'Listing tags');
-        return (response.data.tags || []).map((t) => ({ id: t.id, name: t.name }));
-      },
-      sample: { id: '5d6e7f80-2222-4333-8444-555566667777', name: 'customer' },
-    },
-  },
-};
+const list = dropdown({ key: 'list', noun: 'List', label: 'New List', sample: samples.sampleList, load: (z) => getAll(z, '/lists', 'lists', 'Listing lists') });
+const tag = dropdown({ key: 'tag', noun: 'Tag', label: 'New Tag', sample: samples.sampleTag, load: (z) => getAll(z, '/tags', 'tags', 'Listing tags') });
+const form = dropdown({ key: 'form', noun: 'Form', label: 'New Form', sample: { id: samples.IDS.form, name: 'Homepage signup' }, load: (z) => getAll(z, '/forms', 'forms', 'Listing forms') });
+const campaign = dropdown({ key: 'campaign', noun: 'Campaign', label: 'New Campaign', sample: samples.sampleCampaign, load: (z) => listAll(z, '/campaigns', 'campaigns', {}, 'Listing campaigns') });
+const segment = dropdown({ key: 'segment', noun: 'Segment', label: 'New Segment', sample: { id: samples.IDS.segment, name: 'Opened in the last 30 days' }, load: (z) => getAll(z, '/segments', 'segments', 'Listing segments') });
+const automation = dropdown({ key: 'automation', noun: 'Automation', label: 'New Automation', sample: { id: samples.IDS.automation, name: 'Welcome series' }, load: (z) => getAll(z, '/automations', 'automations', 'Listing automations') });
 
-const form = {
-  key: 'form',
-  noun: 'Form',
-  list: {
-    display: { label: 'New Form', description: 'Triggers when a form is created.', hidden: true },
-    operation: {
-      perform: async (z) => {
-        const response = await z.request({ url: `${BASE_URL}/forms`, skipThrowForStatus: true });
-        check(z, response, 'Listing forms');
-        return (response.data.forms || []).map((f) => ({ id: f.id, name: f.name }));
-      },
-      sample: { id: '8f3c1a2e-3b1d-4c55-9a0e-1f2d3c4b5a69', name: 'Homepage signup' },
-    },
-  },
-};
-
-module.exports = { list, tag, form };
+module.exports = { list, tag, form, campaign, segment, automation };

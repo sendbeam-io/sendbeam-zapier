@@ -1,7 +1,7 @@
 {
   "name": "sendbeam-zapier",
-  "version": "1.0.1",
-  "description": "SendBeam integration for Zapier: triggers on new subscribers, unsubscribes and form submissions; actions to add contacts, lists, tags and send email.",
+  "version": "1.1.0",
+  "description": "SendBeam integration for Zapier: instant triggers for every SendBeam event; actions and searches for contacts, lists, tags, email, campaigns and automations.",
   "main": "index.js",
   "private": true,
   "license": "MIT",

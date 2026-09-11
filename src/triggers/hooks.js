@@ -6,8 +6,10 @@
  * unsubscribing deletes it. The delivery body is
  * `{ id, event, created_at, data }`. Contact events carry the person under
  * `data.contact`, with `data.list` or `data.tag` beside it on membership
- * events; a form submission's fields sit directly in `data`.
+ * events; every other event's fields sit directly in `data`.
  */
+
+const { BASE_URL, check } = require('../api');
 
 /**
  * The fields a Zap maps, flat, the same shape as the sample data and
@@ -19,74 +21,64 @@ const flatten = (data) => {
   return { ...contact, ...rest };
 };
 
-const { BASE_URL, check } = require('../api');
+/**
+ * For events SendBeam's API cannot list after the fact (an email opened, a
+ * contact deleted), testing the trigger finds nothing and the Zap editor
+ * offers the sample instead of presenting unrelated records as the event.
+ */
+const nothingToList = async () => [];
 
-const sampleContact = {
-  id: '3f0e2b6e-9a11-4d7a-8c3c-2f2b4b1c9d10',
-  email: 'ada@example.com',
-  status: 'subscribed',
-  first_name: 'Ada',
-  last_name: 'Lovelace',
-  source: 'api',
-  custom_fields: { plan: 'starter' },
-  created_at: '2026-09-05T09:12:00.000Z',
-  subscribed_at: '2026-09-05T09:12:00.000Z',
-  unsubscribed_at: null,
-  tags: ['customer'],
+/**
+ * `filter` narrows a trigger to one list, tag, campaign or form:
+ * `{ key, label, dynamic, helpText, dimension, valueOf }`. The choice is sent
+ * to SendBeam as the endpoint's filter, so other events never leave SendBeam,
+ * and checked again here in case a delivery arrives from before a change.
+ */
+const makeHookTrigger = ({ key, noun, label, description, event, sample, outputFields, filter, performList }) => {
+  // SendBeam IDs are lowercase UUIDs; a pasted ID may not be.
+  const chosen = (bundle) => (filter ? String((bundle.inputData || {})[filter.key] || '').trim().toLowerCase() : '');
+  const inputFields = filter
+    ? [{ key: filter.key, label: filter.label, required: false, dynamic: filter.dynamic, helpText: filter.helpText }]
+    : [];
+
+  return {
+    key,
+    noun,
+    display: { label, description },
+    operation: {
+      type: 'hook',
+      inputFields,
+      performSubscribe: async (z, bundle) => {
+        const body = { url: bundle.targetUrl, event_types: [event], description: `Zapier: ${label}` };
+        const id = chosen(bundle);
+        if (id) body.filters = { [filter.dimension]: [id] };
+        const response = await z.request({ method: 'POST', url: `${BASE_URL}/webhooks`, body, skipThrowForStatus: true });
+        check(z, response, 'Creating the webhook');
+        const created = response.data.webhook || response.data;
+        return { id: created.id };
+      },
+      performUnsubscribe: async (z, bundle) => {
+        const id = bundle.subscribeData && bundle.subscribeData.id;
+        if (!id) return { ok: true };
+        const response = await z.request({ method: 'DELETE', url: `${BASE_URL}/webhooks/${id}`, skipThrowForStatus: true });
+        if (response.status !== 404) check(z, response, 'Removing the webhook');
+        return { ok: true };
+      },
+      perform: (z, bundle) => {
+        const body = bundle.cleanedRequest || {};
+        if (body.event && body.event !== event) return [];
+        const data = flatten(body.data);
+        const id = chosen(bundle);
+        if (id && String(filter.valueOf(data) || '').toLowerCase() !== id) return [];
+        // The delivery id is stable across SendBeam's retries, so Zapier dedupes on it.
+        const fallback = data.id || data.send_id || data.submission_id || data.campaign_id || data.domain_id || '';
+        return [{ ...data, event_id: body.id || `${event}:${fallback}:${body.created_at || ''}`, event_at: body.created_at || null }];
+      },
+      performList: performList || nothingToList,
+      sample,
+      outputFields,
+    },
+  };
 };
 
-const contactOutputFields = [
-  { key: 'id', label: 'Contact ID' },
-  { key: 'email', label: 'Email' },
-  { key: 'status', label: 'Status' },
-  { key: 'first_name', label: 'First name' },
-  { key: 'last_name', label: 'Last name' },
-  { key: 'source', label: 'Source' },
-  { key: 'created_at', label: 'Created at', type: 'datetime' },
-  { key: 'subscribed_at', label: 'Subscribed at', type: 'datetime' },
-  { key: 'unsubscribed_at', label: 'Unsubscribed at', type: 'datetime' },
-  { key: 'tags', label: 'Tags', list: true },
-  { key: 'event_id', label: 'Event ID' },
-  { key: 'event_at', label: 'Event time', type: 'datetime' },
-];
-
-const makeHookTrigger = ({ key, noun, label, description, event, sample, outputFields, inputFields = [], keep = () => true, performList }) => ({
-  key,
-  noun,
-  display: { label, description },
-  operation: {
-    type: 'hook',
-    inputFields,
-    performSubscribe: async (z, bundle) => {
-      const response = await z.request({
-        method: 'POST',
-        url: `${BASE_URL}/webhooks`,
-        body: { url: bundle.targetUrl, event_types: [event], description: `Zapier: ${label}` },
-        skipThrowForStatus: true,
-      });
-      check(z, response, 'Creating the webhook');
-      const created = response.data.webhook || response.data;
-      return { id: created.id };
-    },
-    performUnsubscribe: async (z, bundle) => {
-      const id = bundle.subscribeData && bundle.subscribeData.id;
-      if (!id) return { ok: true };
-      const response = await z.request({ method: 'DELETE', url: `${BASE_URL}/webhooks/${id}`, skipThrowForStatus: true });
-      if (response.status !== 404) check(z, response, 'Removing the webhook');
-      return { ok: true };
-    },
-    perform: (z, bundle) => {
-      const body = bundle.cleanedRequest || {};
-      if (body.event && body.event !== event) return [];
-      const data = flatten(body.data);
-      if (!keep(data, bundle)) return [];
-      // The delivery id is stable across SendBeam's retries, so Zapier dedupes on it.
-      return [{ ...data, event_id: body.id || `${event}:${data.id || ''}:${body.created_at || ''}`, event_at: body.created_at || null }];
-    },
-    performList,
-    sample,
-    outputFields,
-  },
-});
-
-module.exports = { makeHookTrigger, sampleContact, contactOutputFields };
+module.exports = { makeHookTrigger, flatten, nothingToList };

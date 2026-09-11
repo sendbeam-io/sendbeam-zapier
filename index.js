@@ -6,39 +6,42 @@ const zapier = require('zapier-platform-core');
 const authentication = require('./src/authentication');
 const { includeApiKey } = require('./src/middleware');
 const resources = require('./src/resources');
-const newContact = require('./src/triggers/new_contact');
-const newUnsubscribe = require('./src/triggers/new_unsubscribe');
-const newListMember = require('./src/triggers/new_list_member');
-const formSubmission = require('./src/triggers/form_submission');
-const createContact = require('./src/creates/create_contact');
-const addToList = require('./src/creates/add_to_list');
-const addTag = require('./src/creates/add_tag');
-const sendEmail = require('./src/creates/send_email');
-const findContact = require('./src/searches/find_contact');
+const { triggers } = require('./src/triggers');
+const contactCreates = require('./src/creates/contacts');
+const emailCreates = require('./src/creates/email');
+const campaignCreates = require('./src/creates/campaigns');
+const workspaceCreates = require('./src/creates/workspace');
+const searches = require('./src/searches');
+
+const byKey = (items) => Object.fromEntries(items.map((item) => [item.key, item]));
+
+const searchOrCreate = (search, create, label) => ({
+  key: search,
+  display: { label, description: `${label}: finds it first, and creates it when it does not exist.` },
+  search,
+  create,
+});
 
 module.exports = {
   version: packageVersion,
   platformVersion: zapier.version,
   authentication,
   beforeRequest: [includeApiKey],
-  resources: {
-    [resources.list.key]: resources.list,
-    [resources.tag.key]: resources.tag,
-    [resources.form.key]: resources.form,
-  },
-  triggers: {
-    [newContact.key]: newContact,
-    [newUnsubscribe.key]: newUnsubscribe,
-    [newListMember.key]: newListMember,
-    [formSubmission.key]: formSubmission,
-  },
-  creates: {
-    [createContact.key]: createContact,
-    [addToList.key]: addToList,
-    [addTag.key]: addTag,
-    [sendEmail.key]: sendEmail,
-  },
-  searches: {
-    [findContact.key]: findContact,
-  },
+  // Input data reaches perform as entered: empty values are handled in the
+  // actions, and nothing is stripped from email content.
+  flags: { cleanInputData: false },
+  resources: byKey(Object.values(resources)),
+  triggers: byKey(triggers),
+  creates: byKey([
+    ...Object.values(contactCreates),
+    ...Object.values(emailCreates),
+    ...Object.values(campaignCreates),
+    ...Object.values(workspaceCreates),
+  ]),
+  searches: byKey(Object.values(searches)),
+  searchOrCreates: byKey([
+    searchOrCreate('find_contact', 'create_contact', 'Find or Create Contact'),
+    searchOrCreate('find_list', 'create_list', 'Find or Create List'),
+    searchOrCreate('find_tag', 'create_tag', 'Find or Create Tag'),
+  ]),
 };
