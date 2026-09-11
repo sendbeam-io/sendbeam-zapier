@@ -1,13 +1,13 @@
 'use strict';
 
 /**
- * One instant trigger per SendBeam webhook event. The event list must match
- * SendBeam's own (test/contract.test.js checks it against the API
- * description).
+ * One instant trigger per SendBeam webhook event, apart from the sending-domain
+ * events. The event list must match SendBeam's own (test/contract.test.js
+ * checks it against the API description).
  */
 
 const { BASE_URL, check, getAll } = require('../api');
-const { makeHookTrigger, nothingToList } = require('./hooks');
+const { makeHookTrigger } = require('./hooks');
 const s = require('./samples');
 
 const filters = {
@@ -45,16 +45,22 @@ const filters = {
   },
 };
 
-/** Recent contacts, optionally with one status, for sample data in the Zap editor. */
+// The fallbacks below stand in for recent events before the workspace has any
+// recorded, listing what the API holds in the shape of the event.
+
+/** A contact from the API, with only the fields a contact event carries. */
+const asEventContact = (c) => Object.fromEntries(Object.keys(s.sampleContact).filter((k) => k in c).map((k) => [k, c[k]]));
+
+/** Recent contacts, optionally with one status. */
 const recentContacts = (event, status, when = (c) => c.created_at) => async (z) => {
   const response = await z.request({ url: `${BASE_URL}/contacts`, params: { limit: 25, ...(status ? { status } : {}) }, skipThrowForStatus: true });
   check(z, response, 'Listing contacts');
-  return (response.data.contacts || []).map((c) => ({ ...c, event_id: `${event}:${c.id}`, event_at: when(c) }));
+  return (response.data.contacts || []).map((c) => ({ ...asEventContact(c), event_id: `${event}:${c.id}`, event_at: when(c) }));
 };
 
 const chosenId = (bundle, key) => String((bundle.inputData || {})[key] || '').trim().toLowerCase();
 
-/** Contacts who have the chosen tag (or the first tag), for sample data. */
+/** Contacts who have the chosen tag (or the first tag). */
 const taggedContacts = async (z, bundle) => {
   const tags = await getAll(z, '/tags', 'tags', 'Listing tags');
   const wanted = chosenId(bundle, 'tag_id');
@@ -62,10 +68,10 @@ const taggedContacts = async (z, bundle) => {
   if (!tag) return [];
   const response = await z.request({ url: `${BASE_URL}/contacts`, params: { tag: tag.id, limit: 25 }, skipThrowForStatus: true });
   check(z, response, 'Listing contacts');
-  return (response.data.contacts || []).map((c) => ({ ...c, tag: { id: tag.id, name: tag.name }, event_id: `contact.tag_added:${tag.id}:${c.id}`, event_at: c.created_at }));
+  return (response.data.contacts || []).map((c) => ({ ...asEventContact(c), tag: { id: tag.id, name: tag.name }, event_id: `contact.tag_added:${tag.id}:${c.id}`, event_at: c.created_at }));
 };
 
-/** Members of the chosen list (or the first list), for sample data. */
+/** Members of the chosen list (or the first list). */
 const listMembers = async (z, bundle) => {
   const lists = await getAll(z, '/lists', 'lists', 'Listing lists');
   const wanted = chosenId(bundle, 'list_id');
@@ -73,15 +79,15 @@ const listMembers = async (z, bundle) => {
   if (!list) return [];
   const response = await z.request({ url: `${BASE_URL}/lists/${list.id}/contacts`, params: { limit: 25 }, skipThrowForStatus: true });
   check(z, response, 'Listing list members');
-  return (response.data.contacts || []).map(({ added_at, ...c }) => ({
-    ...c,
+  return (response.data.contacts || []).map((c) => ({
+    ...asEventContact(c),
     list: { id: list.id, name: list.name },
     event_id: `contact.list_joined:${list.id}:${c.id}`,
-    event_at: added_at || c.created_at,
+    event_at: c.added_at || c.created_at,
   }));
 };
 
-/** Sent campaigns, in the shape of a campaign.sent delivery, for sample data. */
+/** Sent campaigns, in the shape of a campaign.sent delivery. */
 const sentCampaigns = async (z, bundle) => {
   const response = await z.request({ url: `${BASE_URL}/campaigns`, params: { status: 'sent', limit: 25 }, skipThrowForStatus: true });
   check(z, response, 'Listing campaigns');
@@ -100,7 +106,7 @@ const sentCampaigns = async (z, bundle) => {
     }));
 };
 
-const contactTrigger = ({ key, event, label, description, status, extra = {}, extraFields = [], filter, performList }) =>
+const contactTrigger = ({ key, event, label, description, status, extra = {}, extraFields = [], filter, fallback }) =>
   makeHookTrigger({
     key,
     noun: 'Contact',
@@ -108,7 +114,7 @@ const contactTrigger = ({ key, event, label, description, status, extra = {}, ex
     description,
     event,
     filter,
-    performList,
+    fallback,
     sample: s.withEvent({ ...s.sampleContact, ...(status ? { status } : {}), ...extra }, `ev_${key}`),
     outputFields: [...s.contactOutputFields, ...extraFields, ...s.eventOutputFields],
   });
@@ -140,14 +146,14 @@ const triggers = [
     event: 'contact.created',
     label: 'New Contact',
     description: 'Triggers when a contact is added to the workspace, by a form, an import, the API or by hand.',
-    performList: recentContacts('contact.created'),
+    fallback: recentContacts('contact.created'),
   }),
   contactTrigger({
     key: 'contact_updated',
     event: 'contact.updated',
     label: 'Contact Updated',
     description: 'Triggers when a contact\'s details change. Changes to lists and tags have their own triggers.',
-    performList: recentContacts('contact.updated'),
+    fallback: recentContacts('contact.updated'),
   }),
   contactTrigger({
     key: 'new_unsubscribe',
@@ -156,7 +162,7 @@ const triggers = [
     description: 'Triggers when a contact unsubscribes, from a link in an email, the preferences page or the API.',
     status: 'unsubscribed',
     extra: { unsubscribed_at: s.EVENT_AT },
-    performList: recentContacts('contact.unsubscribed', 'unsubscribed', (c) => c.unsubscribed_at || c.created_at),
+    fallback: recentContacts('contact.unsubscribed', 'unsubscribed', (c) => c.unsubscribed_at || c.created_at),
   }),
   contactTrigger({
     key: 'contact_resubscribed',
@@ -170,7 +176,7 @@ const triggers = [
     label: 'Contact Bounced',
     description: 'Triggers when a contact\'s address bounces and SendBeam stops emailing it.',
     status: 'bounced',
-    performList: recentContacts('contact.bounced', 'bounced'),
+    fallback: recentContacts('contact.bounced', 'bounced'),
   }),
   contactTrigger({
     key: 'contact_complained',
@@ -178,7 +184,7 @@ const triggers = [
     label: 'Contact Complained',
     description: 'Triggers when a contact marks an email as spam and SendBeam stops emailing them.',
     status: 'complained',
-    performList: recentContacts('contact.complained', 'complained'),
+    fallback: recentContacts('contact.complained', 'complained'),
   }),
   contactTrigger({
     key: 'contact_deleted',
@@ -194,7 +200,7 @@ const triggers = [
     extra: sampleTagRef,
     extraFields: tagFields,
     filter: filters.tag,
-    performList: taggedContacts,
+    fallback: taggedContacts,
   }),
   contactTrigger({
     key: 'tag_removed',
@@ -213,7 +219,7 @@ const triggers = [
     extra: sampleListRef,
     extraFields: listFields,
     filter: filters.list,
-    performList: listMembers,
+    fallback: listMembers,
   }),
   contactTrigger({
     key: 'list_member_removed',
@@ -283,7 +289,7 @@ const triggers = [
     description: 'Triggers when a campaign finishes sending to its whole audience, optionally only one particular campaign.',
     event: 'campaign.sent',
     filter: filters.campaign,
-    performList: sentCampaigns,
+    fallback: sentCampaigns,
     sample: s.withEvent({ campaign_id: s.IDS.campaign, name: 'September newsletter', sent_at: s.EVENT_AT, recipients: 1834, delivered: 1821, bounced: 13 }, 'ev_campaign_sent'),
     outputFields: [
       { key: 'campaign_id', label: 'Campaign ID' },
@@ -331,36 +337,6 @@ const triggers = [
       ...s.eventOutputFields,
     ],
   }),
-  makeHookTrigger({
-    key: 'domain_verified',
-    noun: 'Sending Domain',
-    label: 'Domain Verified',
-    description: 'Triggers when a sending domain finishes verification and is ready to send.',
-    event: 'domain.verified',
-    sample: s.withEvent({ domain_id: s.IDS.domain, domain: 'mail.example.com', workspace_id: s.IDS.workspace, verified_at: s.EVENT_AT }, 'ev_domain_verified'),
-    outputFields: [
-      { key: 'domain_id', label: 'Domain ID' },
-      { key: 'domain', label: 'Domain' },
-      { key: 'workspace_id', label: 'Workspace ID' },
-      { key: 'verified_at', label: 'Verified At', type: 'datetime' },
-      ...s.eventOutputFields,
-    ],
-  }),
-  makeHookTrigger({
-    key: 'domain_failed',
-    noun: 'Sending Domain',
-    label: 'Domain Failed',
-    description: 'Triggers when a sending domain fails verification or its verification lapses.',
-    event: 'domain.failed',
-    sample: s.withEvent({ domain_id: s.IDS.domain, domain: 'mail.example.com', workspace_id: s.IDS.workspace, reason: 'DNS verification failed. Check that every record is present and exact, then try again.' }, 'ev_domain_failed'),
-    outputFields: [
-      { key: 'domain_id', label: 'Domain ID' },
-      { key: 'domain', label: 'Domain' },
-      { key: 'workspace_id', label: 'Workspace ID' },
-      { key: 'reason', label: 'Reason' },
-      ...s.eventOutputFields,
-    ],
-  }),
 ];
 
 /** The SendBeam event behind each trigger key, for tests. */
@@ -384,11 +360,6 @@ const EVENTS = {
   email_complained: 'email.complained',
   campaign_sent: 'campaign.sent',
   form_submission: 'form.submitted',
-  domain_verified: 'domain.verified',
-  domain_failed: 'domain.failed',
 };
 
-/** Triggers whose test step loads real records from the account. */
-const LISTED = triggers.filter((t) => t.operation.performList !== nothingToList).map((t) => t.key);
-
-module.exports = { triggers, EVENTS, LISTED, filters };
+module.exports = { triggers, EVENTS, filters };

@@ -21,22 +21,30 @@ const flatten = (data) => {
   return { ...contact, ...rest };
 };
 
-/**
- * For events SendBeam's API cannot list after the fact (an email opened, a
- * contact deleted), testing the trigger finds nothing and the Zap editor
- * offers the sample instead of presenting unrelated records as the event.
- */
-const nothingToList = async () => [];
+/** One event as a Zap receives it, whether it arrived as a delivery or was read back from recent events. */
+const toItem = (event, body) => {
+  const data = flatten(body.data);
+  // The delivery id is stable across SendBeam's retries, so Zapier dedupes on it.
+  const fallback = data.id || data.send_id || data.submission_id || data.campaign_id || '';
+  return { ...data, event_id: body.id || `${event}:${fallback}:${body.created_at || ''}`, event_at: body.created_at || null };
+};
 
 /**
  * `filter` narrows a trigger to one list, tag, campaign or form:
  * `{ key, label, dynamic, helpText, dimension, valueOf }`. The choice is sent
  * to SendBeam as the endpoint's filter, so other events never leave SendBeam,
  * and checked again here in case a delivery arrives from before a change.
+ *
+ * `fallback` lists records the workspace already holds, in the shape of the
+ * event, for testing the trigger before any event of its type is recorded.
  */
-const makeHookTrigger = ({ key, noun, label, description, event, sample, outputFields, filter, performList }) => {
+const makeHookTrigger = ({ key, noun, label, description, event, sample, outputFields, filter, fallback }) => {
   // SendBeam IDs are lowercase UUIDs; a pasted ID may not be.
   const chosen = (bundle) => (filter ? String((bundle.inputData || {})[filter.key] || '').trim().toLowerCase() : '');
+  const wanted = (bundle, item) => {
+    const id = chosen(bundle);
+    return !id || String(filter.valueOf(item) || '').toLowerCase() === id;
+  };
   const inputFields = filter
     ? [{ key: filter.key, label: filter.label, required: false, dynamic: filter.dynamic, helpText: filter.helpText }]
     : [];
@@ -67,18 +75,32 @@ const makeHookTrigger = ({ key, noun, label, description, event, sample, outputF
       perform: (z, bundle) => {
         const body = bundle.cleanedRequest || {};
         if (body.event && body.event !== event) return [];
-        const data = flatten(body.data);
-        const id = chosen(bundle);
-        if (id && String(filter.valueOf(data) || '').toLowerCase() !== id) return [];
-        // The delivery id is stable across SendBeam's retries, so Zapier dedupes on it.
-        const fallback = data.id || data.send_id || data.submission_id || data.campaign_id || data.domain_id || '';
-        return [{ ...data, event_id: body.id || `${event}:${fallback}:${body.created_at || ''}`, event_at: body.created_at || null }];
+        const item = toItem(event, body);
+        return wanted(bundle, item) ? [item] : [];
       },
-      performList: performList || nothingToList,
+      /**
+       * Testing the trigger: the workspace's latest real events of this type,
+       * as they were delivered to its webhooks, mapped exactly as perform maps
+       * a delivery. With none recorded yet the fallback, if there is one, lists
+       * workspace records; otherwise nothing, and the editor offers the sample.
+       */
+      performList: async (z, bundle) => {
+        const response = await z.request({ url: `${BASE_URL}/events`, params: { type: event, limit: 25 }, skipThrowForStatus: true });
+        // A key with webhooks:write but not webhooks:read runs the trigger fine; it only cannot read past events.
+        if (response.status !== 403) {
+          check(z, response, 'Loading recent events');
+          const items = (response.data.events || [])
+            .filter((e) => !e.event || e.event === event)
+            .map((e) => toItem(event, e))
+            .filter((item) => wanted(bundle, item));
+          if (items.length > 0) return items;
+        }
+        return fallback ? fallback(z, bundle) : [];
+      },
       sample,
       outputFields,
     },
   };
 };
 
-module.exports = { makeHookTrigger, flatten, nothingToList };
+module.exports = { makeHookTrigger, flatten };

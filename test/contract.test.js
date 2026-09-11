@@ -14,7 +14,7 @@
 const nock = require('nock');
 const zapier = require('zapier-platform-core');
 const App = require('../index');
-const { EVENTS, LISTED } = require('../src/triggers');
+const { EVENTS } = require('../src/triggers');
 
 const appTester = zapier.createAppTester(App);
 const SPEC_URL = process.env.SENDBEAM_OPENAPI_URL || 'https://sendbeam.io/openapi.json';
@@ -74,13 +74,14 @@ const scenarios = [
   { type: 'searches', key: 'get_campaign_report', inputData: { campaign_id: ID.campaign } },
   ...Object.keys(App.resources).map((key) => ({ type: 'resources', key })),
   // Each trigger subscribes with its filter set (when it has one), unsubscribes,
-  // and loads sample data where SendBeam can list it.
+  // and loads sample data: recent events, then (as there are none here) its
+  // fallback listing, if it has one.
   ...Object.entries(App.triggers).flatMap(([key, trigger]) => {
     const inputData = Object.fromEntries(trigger.operation.inputFields.map((f) => [f.key, ID[f.key.replace(/_id$/, '')]]));
     return [
       { type: 'triggers', key, method: 'performSubscribe', inputData },
       { type: 'triggers', key, method: 'performUnsubscribe' },
-      ...(LISTED.includes(key) ? [{ type: 'triggers', key, method: 'performList', inputData }] : []),
+      { type: 'triggers', key, method: 'performList', inputData },
     ];
   }),
 ];
@@ -90,6 +91,7 @@ const anything = ({ method, path }) => {
   const page = { page: 1, limit: 100, total: 1, total_pages: 1 };
   const person = { id: ID.contact, email: 'jo@example.com', status: 'unsubscribed', custom_fields: {}, created_at: '2026-09-05T09:12:00.000Z' };
   if (method === 'GET') {
+    if (path === '/events') return { events: [] };
     if (path === '/contacts' || /^\/lists\/[^/]+\/contacts$/.test(path)) return { contacts: [person], pagination: page };
     if (path === '/tags') return { tags: [{ id: ID.tag, name: 'Customer' }] };
     if (path === '/lists') return { lists: [{ id: ID.list, name: 'News' }] };
@@ -203,8 +205,22 @@ describe('against the published SendBeam API', () => {
     expect(problems).toEqual([]);
   });
 
-  test('the triggers cover exactly the events SendBeam sends', () => {
-    expect(Object.values(EVENTS).sort()).toEqual([...spec.components.schemas.WebhookEvent.enum].sort());
+  // The sending-domain events are left to SendBeam's own webhooks.
+  const triggerEvents = () => spec.components.schemas.WebhookEvent.enum.filter((e) => !e.startsWith('domain.')).sort();
+
+  test('the triggers cover every event SendBeam sends, apart from the sending-domain ones', () => {
+    expect(Object.values(EVENTS).sort()).toEqual(triggerEvents());
+  });
+
+  test('recent events can be read for every trigger, in the shape a delivery arrives in', () => {
+    const { operation } = documented('GET', '/events');
+    const params = operation.parameters.map(resolve);
+    const type = params.find((p) => p.name === 'type');
+    expect(type.required).toBe(true);
+    expect(resolve(type.schema).enum).toEqual(expect.arrayContaining(Object.values(EVENTS)));
+    expect(params.find((p) => p.name === 'limit').schema.maximum).toBeGreaterThanOrEqual(25);
+    const item = resolve(operation.responses['200']).content['application/json'].schema.properties.events.items;
+    expect(Object.keys(item.properties).sort()).toEqual(['created_at', 'data', 'event', 'id']);
   });
 
   test('trigger subscriptions send each event name SendBeam knows', async () => {
@@ -214,6 +230,6 @@ describe('against the published SendBeam API', () => {
       await appTester(trigger.operation.performSubscribe, { authData, inputData: {}, targetUrl: 'https://hooks.zapier.com/hooks/standard/1/abc/' });
       sent.push(...calls[0].body.event_types);
     }
-    expect(sent.sort()).toEqual([...spec.components.schemas.WebhookEvent.enum].sort());
+    expect(sent.sort()).toEqual(triggerEvents());
   });
 });

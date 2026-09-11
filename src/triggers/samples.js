@@ -14,7 +14,6 @@ const IDS = {
   campaign: '2f9c1b1e-3f9e-4a3b-9c2f-1d1e2f3a4b5c',
   send: 'c0ffee00-1111-4222-8333-444455556666',
   submission: 'b1d2c3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d',
-  domain: '7e8f9a0b-3333-4444-8555-666677778888',
   workspace: '1a2b3c4d-5555-4666-8777-888899990000',
   automation: 'f6e5d4c3-b2a1-4f0e-9d8c-7b6a5f4e3d2c',
   segment: '4b5c6d7e-6666-4777-8888-9999aaaabbbb',

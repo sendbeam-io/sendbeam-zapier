@@ -6,7 +6,7 @@ const nock = require('nock');
 const zapier = require('zapier-platform-core');
 const App = require('../index');
 const pkg = require('../package.json');
-const { EVENTS, LISTED } = require('../src/triggers');
+const { EVENTS } = require('../src/triggers');
 
 const appTester = zapier.createAppTester(App);
 const API = 'https://sendbeam.io';
@@ -50,10 +50,10 @@ describe('authentication', () => {
 });
 
 describe('the app', () => {
-  test('is version 1.1.0 with 21 triggers, 17 actions and 5 searches', () => {
-    expect(App.version).toBe('1.1.0');
-    expect(pkg.version).toBe('1.1.0');
-    expect(Object.keys(App.triggers)).toHaveLength(21);
+  test('is version 1.2.0 with 19 triggers, 17 actions and 5 searches', () => {
+    expect(App.version).toBe('1.2.0');
+    expect(pkg.version).toBe('1.2.0');
+    expect(Object.keys(App.triggers)).toHaveLength(19);
     expect(Object.keys(App.creates)).toHaveLength(17);
     expect(Object.keys(App.searches)).toHaveLength(5);
     expect(Object.keys(App.resources).sort()).toEqual(['automation', 'campaign', 'form', 'list', 'segment', 'tag']);
@@ -115,7 +115,8 @@ describe('the app', () => {
 describe('instant triggers', () => {
   test('there is one trigger per SendBeam event', () => {
     expect(Object.keys(App.triggers).sort()).toEqual(Object.keys(EVENTS).sort());
-    expect(new Set(Object.values(EVENTS)).size).toBe(21);
+    expect(new Set(Object.values(EVENTS)).size).toBe(19);
+    expect(Object.values(EVENTS).filter((e) => e.startsWith('domain.'))).toEqual([]);
   });
 
   describe.each(Object.entries(EVENTS))('%s', (key, event) => {
@@ -147,6 +148,20 @@ describe('instant triggers', () => {
     test('ignores a delivery for another event', async () => {
       const other = event === 'contact.updated' ? 'contact.created' : 'contact.updated';
       await expect(run(op.perform, { inputData: {}, cleanedRequest: { ...delivery(), event: other } })).resolves.toEqual([]);
+    });
+    test('tests with its latest real events, mapped exactly as a delivery is', async () => {
+      const older = { ...delivery(), id: 'dlv-0', created_at: '2026-09-04T10:00:00.000Z' };
+      nock(API).get(`${V1}/events`).query({ type: event, limit: 25 }).reply(200, { events: [delivery(), older] });
+      const out = await run(op.performList, { inputData: {} });
+      const live = [
+        ...(await run(op.perform, { inputData: {}, cleanedRequest: delivery() })),
+        ...(await run(op.perform, { inputData: {}, cleanedRequest: older })),
+      ];
+      expect(out).toEqual(live);
+      expect(Object.keys(out[0]).sort()).toEqual(Object.keys(op.sample).sort());
+      for (const field of op.outputFields.filter((f) => f.type === 'datetime' && out[0][f.key] != null)) {
+        expect(out[0][field.key]).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/);
+      }
     });
   });
 
@@ -202,9 +217,27 @@ describe('instant triggers', () => {
     await expect(run(App.triggers.contact_deleted.operation.performUnsubscribe, { subscribeData: { id: 'wh-9' } })).rejects.toThrow('Failed to delete webhook');
   });
 
-  describe('sample data from the account', () => {
-    test('New Contact lists recent contacts', async () => {
+  describe('sample data', () => {
+    const noEvents = (event) => nock(API).get(`${V1}/events`).query({ type: event, limit: 25 }).reply(200, { events: [] });
+
+    test('a chosen tag, list, campaign or form narrows the recent events too', async () => {
+      const tagged = (tagId, id) => ({ id, event: 'contact.tag_added', created_at: AT, data: { contact, tag: { id: tagId, name: 'VIP' } } });
+      nock(API).get(`${V1}/events`).query({ type: 'contact.tag_added', limit: 25 }).reply(200, { events: [tagged(T, 'dlv-1'), tagged(T2, 'dlv-2')] });
+      const out = await run(App.triggers.tag_added.operation.performList, { inputData: { tag_id: T2.toUpperCase() } });
+      expect(out).toEqual([{ ...contact, tag: { id: T2, name: 'VIP' }, event_id: 'dlv-2', event_at: AT }]);
+    });
+    test('a key without webhooks:read still gets records from the workspace', async () => {
+      nock(API).get(`${V1}/events`).query(true).reply(403, { error: 'Forbidden: webhooks:read permission required' });
       nock(API).get(`${V1}/contacts`).query({ limit: 25 }).reply(200, { contacts: [contact] });
+      await expect(run(App.triggers.new_contact.operation.performList)).resolves.toHaveLength(1);
+    });
+    test('any other failure to load events is reported', async () => {
+      nock(API).get(`${V1}/events`).query(true).reply(500, { error: 'Failed to list events' });
+      await expect(run(App.triggers.email_opened.operation.performList)).rejects.toThrow('Failed to list events');
+    });
+    test('New Contact lists recent contacts, with only the fields the event carries, before any event is recorded', async () => {
+      noEvents('contact.created');
+      nock(API).get(`${V1}/contacts`).query({ limit: 25 }).reply(200, { contacts: [{ ...contact, tenant_id: 'ws-1' }] });
       const out = await run(App.triggers.new_contact.operation.performList);
       expect(out).toEqual([{ ...contact, event_id: `contact.created:${C}`, event_at: contact.created_at }]);
     });
@@ -214,26 +247,31 @@ describe('instant triggers', () => {
       ['contact_complained', 'complained'],
     ])('%s lists contacts with status %s', async (key, status) => {
       const row = { ...contact, status, unsubscribed_at: '2026-09-06T08:00:00.000Z' };
+      noEvents(EVENTS[key]);
       nock(API).get(`${V1}/contacts`).query({ limit: 25, status }).reply(200, { contacts: [row] });
       const out = await run(App.triggers[key].operation.performList);
       expect(out[0]).toMatchObject({ email: 'ada@example.com', status, event_id: `${EVENTS[key]}:${C}` });
       if (key === 'new_unsubscribe') expect(out[0].event_at).toBe('2026-09-06T08:00:00.000Z');
     });
     test('Contact Updated lists recent contacts', async () => {
+      noEvents('contact.updated');
       nock(API).get(`${V1}/contacts`).query({ limit: 25 }).reply(200, { contacts: [contact] });
       await expect(run(App.triggers.contact_updated.operation.performList)).resolves.toEqual([{ ...contact, event_id: `contact.updated:${C}`, event_at: contact.created_at }]);
     });
     test('Contact Added to List lists members of the chosen list', async () => {
+      noEvents('contact.list_joined');
       nock(API).get(`${V1}/lists`).reply(200, { lists: [{ id: L, name: 'News' }, { id: L2, name: 'Offers' }] });
       nock(API).get(`${V1}/lists/${L2}/contacts`).query({ limit: 25 }).reply(200, { contacts: [{ ...contact, added_at: AT }], pagination: {} });
       const out = await run(App.triggers.new_list_member.operation.performList, { inputData: { list_id: L2.toUpperCase() } });
       expect(out).toEqual([{ ...contact, list: { id: L2, name: 'Offers' }, event_id: `contact.list_joined:${L2}:${C}`, event_at: AT }]);
     });
     test('Contact Added to List finds nothing for a list that no longer exists', async () => {
+      noEvents('contact.list_joined');
       nock(API).get(`${V1}/lists`).reply(200, { lists: [{ id: L, name: 'News' }] });
       await expect(run(App.triggers.new_list_member.operation.performList, { inputData: { list_id: OTHER } })).resolves.toEqual([]);
     });
     test('Tag Added to Contact lists contacts with the first tag when none is chosen', async () => {
+      noEvents('contact.tag_added');
       nock(API).get(`${V1}/tags`).reply(200, { tags: [{ id: T, name: 'customer' }, { id: T2, name: 'VIP' }] });
       nock(API).get(`${V1}/contacts`).query({ tag: T, limit: 25 }).reply(200, { contacts: [contact] });
       const out = await run(App.triggers.tag_added.operation.performList, { inputData: {} });
@@ -241,16 +279,18 @@ describe('instant triggers', () => {
     });
     test('Campaign Sent lists sent campaigns in the shape of the event', async () => {
       const sent = { id: CMP, name: 'September', sent_at: AT, stats_sent: 20, stats_delivered: 19, stats_bounced: 1 };
+      noEvents('campaign.sent');
       nock(API).get(`${V1}/campaigns`).query({ status: 'sent', limit: 25 }).reply(200, { campaigns: [sent, { ...sent, id: OTHER }], pagination: {} });
       const out = await run(App.triggers.campaign_sent.operation.performList, { inputData: { campaign_id: CMP } });
       expect(out).toEqual([{ campaign_id: CMP, name: 'September', sent_at: AT, recipients: 20, delivered: 19, bounced: 1, event_id: `campaign.sent:${CMP}`, event_at: AT }]);
       const { event_id: _e, event_at: _a, ...fields } = App.triggers.campaign_sent.operation.sample;
       expect(Object.keys(out[0]).sort()).toEqual([...Object.keys(fields), 'event_id', 'event_at'].sort());
     });
-    test('events the API cannot list after the fact find nothing, so the editor offers the sample', async () => {
-      expect(LISTED.sort()).toEqual(['campaign_sent', 'contact_bounced', 'contact_complained', 'contact_updated', 'new_contact', 'new_list_member', 'new_unsubscribe', 'tag_added']);
-      for (const trigger of Object.values(App.triggers).filter((t) => !LISTED.includes(t.key))) {
-        await expect(run(trigger.operation.performList, { inputData: {} })).resolves.toEqual([]);
+    test('the other triggers find nothing until an event is recorded, so the editor offers the sample', async () => {
+      const fromWorkspace = ['campaign_sent', 'contact_bounced', 'contact_complained', 'contact_updated', 'new_contact', 'new_list_member', 'new_unsubscribe', 'tag_added'];
+      for (const [key, event] of Object.entries(EVENTS).filter(([k]) => !fromWorkspace.includes(k))) {
+        noEvents(event);
+        await expect(run(App.triggers[key].operation.performList, { inputData: {} })).resolves.toEqual([]);
       }
     });
   });

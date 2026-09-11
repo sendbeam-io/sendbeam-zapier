@@ -6,7 +6,10 @@ workspace = one site), authenticated with an API key.
 
 ## Triggers
 
-Every trigger is instant: a SendBeam webhook, not polling.
+Every trigger is instant: a SendBeam webhook, not polling. Testing a trigger in the Zap editor loads the
+workspace's latest real events of that type, the ones SendBeam has sent to any of its webhooks, in exactly the
+shape a live Zap receives. Until there are some, the contact, tag, list and campaign triggers that can show real
+records from the workspace do, and the rest show a sample.
 
 | Trigger | Fires when | Filter |
 | --- | --- | --- |
@@ -29,8 +32,6 @@ Every trigger is instant: a SendBeam webhook, not polling.
 | **Email Complained** | a recipient marks an email as spam | campaign |
 | **Campaign Sent** | a campaign finishes sending to its whole audience | campaign |
 | **New Form Submission** | a signup or contact form is submitted, with every field | form |
-| **Domain Verified** | a sending domain is verified | |
-| **Domain Failed** | a sending domain fails verification | |
 
 Contact triggers give the contact's fields at the top level (id, email, status, names, source, custom fields,
 tags, dates), plus `list` or `tag` on the list and tag triggers. A filter is optional; when one is chosen, SendBeam
@@ -78,7 +79,8 @@ typed or mapped by name.
 ## Permissions on the API key
 
 Make the key under **Settings → API keys** in the workspace the Zap is about. Connecting needs `contacts:read`;
-triggers need `webhooks:write`; actions and searches need what the tables say. A key without a permission gets a
+triggers need `webhooks:write`, and `webhooks:read` to load recent events when you test one; actions and searches
+need what the tables say. A key without a permission gets a
 clear error in the Zap's history rather than a silent no-op.
 
 ## Development
@@ -91,8 +93,8 @@ npm run validate             # Zapier schema, integration and style checks
 
 `test/contract.test.js` runs every trigger, action, search and dropdown against a stand-in API and checks each
 request against [SendBeam's API description](https://sendbeam.io/openapi.json): documented paths, methods, body
-fields and query parameters only, and exactly the webhook events SendBeam sends. It needs network access to fetch
-the description; set `SENDBEAM_OPENAPI_URL` to check against another copy.
+fields and query parameters only, and every webhook event SendBeam sends apart from the sending-domain ones. It
+needs network access to fetch the description; set `SENDBEAM_OPENAPI_URL` to check against another copy.
 
 `SENDBEAM_API_BASE` overrides the API origin for a staging SendBeam (default `https://sendbeam.io/api/v1`).
 
