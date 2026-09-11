@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question about SendBeam itself
+    url: https://sendbeam.io/contact
+    about: Your account, plans, billing, deliverability or the API — anything that is not this app.
+  - name: Help with Zapier
+    url: https://help.zapier.com
+    about: Building Zaps, task history, plans and billing on Zapier.
+  - name: SendBeam API reference
+    url: https://sendbeam.io/docs/api
+    about: Every endpoint the app calls, and the permissions each one needs.
+  - name: Report a security problem
+    url: https://github.com/sendbeam-io/sendbeam-zapier/blob/main/SECURITY.md
+    about: Please do not open a public issue for anything exploitable.

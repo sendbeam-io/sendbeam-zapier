@@ -1,8 +1,24 @@
 # SendBeam for Zapier
 
+[![Verify app](https://github.com/sendbeam-io/sendbeam-zapier/actions/workflows/verify.yml/badge.svg)](https://github.com/sendbeam-io/sendbeam-zapier/actions/workflows/verify.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+
 The official [SendBeam](https://sendbeam.io) app for Zapier, built on the
 [Zapier Platform CLI](https://github.com/zapier/zapier-platform). One connection per SendBeam workspace (one
 workspace = one site), authenticated with an API key.
+
+The app is in review with Zapier. Until it is public, it is shared by invitation; ask at
+<https://sendbeam.io/contact>. What it does is below, and [sendbeam.io/integrations/zapier](https://sendbeam.io/integrations/zapier)
+puts it in context.
+
+## Getting started
+
+1. **Create an API key.** In SendBeam, open **Settings → API keys** in the workspace the Zap is about, and tick
+   the permissions the tables below ask for. The full key is shown once.
+2. **Connect it in Zapier.** Add a SendBeam step to a Zap, choose **Connect a new account** and paste the key.
+   The connection is named after the key, so several workspaces stay apart.
+3. **Pick a trigger or an action**, test it, and turn the Zap on. Each live trigger adds one webhook endpoint to
+   the workspace, listed under **Settings → Webhooks**, and removes it when the Zap is turned off.
 
 ## Triggers
 
@@ -101,6 +117,21 @@ needs network access to fetch the description; set `SENDBEAM_OPENAPI_URL` to che
 One thing to know when adding an action: Zapier's request client blanks any `{{curly}}` text it finds in an
 object body, treating it as an unresolved Zap field. `jsonBody()` in `src/api.js` pre-serialises the body so
 SendBeam merge tags survive; use it for anything that carries user-written email content.
+
+## Support
+
+| What | Where |
+| --- | --- |
+| A bug in this app | [Open an issue](https://github.com/sendbeam-io/sendbeam-zapier/issues/new/choose) |
+| SendBeam itself: your account, pricing, deliverability, the API | <https://sendbeam.io/contact> |
+| Zapier itself: building Zaps, task history, billing | <https://help.zapier.com> |
+| Something exploitable | [SECURITY.md](SECURITY.md) — never a public issue |
+
+## Contributing
+
+Pull requests are welcome; please open an issue first for anything beyond a typo. [CONTRIBUTING.md](CONTRIBUTING.md)
+covers how to run the tests and the house style, and everyone is expected to follow the
+[code of conduct](CODE_OF_CONDUCT.md). What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 

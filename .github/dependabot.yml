@@ -1,0 +1,24 @@
+# zapier-platform-core and zapier-platform-cli are pinned to the same version
+# and have to move together, so they are one group; the test tooling is another.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      zapier-platform:
+        patterns: ["zapier-platform-*"]
+      tooling:
+        patterns: ["*"]
+        exclude-patterns: ["zapier-platform-*"]
+    commit-message:
+      prefix: "deps"
+    labels: ["dependencies"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+    labels: ["ci"]

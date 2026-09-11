@@ -1,0 +1,41 @@
+name: Idea or request
+description: Something the SendBeam app for Zapier should do that it does not.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The app is deliberately focused, and that is a feature of it. That does not mean no — it means the case
+        has to be made. The most persuasive thing you can write here is what you are actually trying to do.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The Zap, not the solution. What are you doing today instead?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What did you have in mind?
+      description: A new trigger, action, search or field? If you are not sure, the problem is the useful half.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part would it touch?
+      options:
+        - Triggers
+        - Contacts
+        - Lists or tags
+        - Email
+        - Campaigns
+        - Automations
+        - Searches
+        - Not sure
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you post
+      options:
+        - label: I have checked the [README](https://github.com/sendbeam-io/sendbeam-zapier#triggers) in case it already does this.
+        - label: I have searched the existing issues.
