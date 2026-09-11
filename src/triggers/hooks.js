@@ -4,9 +4,20 @@
  * One factory for every webhook-backed trigger. Subscribing creates a
  * SendBeam webhook endpoint pointed at Zapier's URL for the chosen event;
  * unsubscribing deletes it. The delivery body is
- * `{ id, event, created_at, data }` where `data` is the contact (plus
- * `list` / `tag` on membership events), or the form submission.
+ * `{ id, event, created_at, data }`. Contact events carry the person under
+ * `data.contact`, with `data.list` or `data.tag` beside it on membership
+ * events; a form submission's fields sit directly in `data`.
  */
+
+/**
+ * The fields a Zap maps, flat, the same shape as the sample data and
+ * performList: the contact's own fields at the top, `list` / `tag` kept.
+ */
+const flatten = (data) => {
+  if (!data || typeof data.contact !== 'object' || data.contact === null) return data || {};
+  const { contact, ...rest } = data;
+  return { ...contact, ...rest };
+};
 
 const { BASE_URL, check } = require('../api');
 
@@ -67,7 +78,7 @@ const makeHookTrigger = ({ key, noun, label, description, event, sample, outputF
     perform: (z, bundle) => {
       const body = bundle.cleanedRequest || {};
       if (body.event && body.event !== event) return [];
-      const data = body.data || {};
+      const data = flatten(body.data);
       if (!keep(data, bundle)) return [];
       // The delivery id is stable across SendBeam's retries, so Zapier dedupes on it.
       return [{ ...data, event_id: body.id || `${event}:${data.id || ''}:${body.created_at || ''}`, event_at: body.created_at || null }];

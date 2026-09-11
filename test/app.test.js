@@ -33,19 +33,30 @@ describe('hook triggers', () => {
     nock(API).delete('/api/v1/webhooks/wh-9').reply(404, { error: 'gone' });
     await expect(appTester(trig.performUnsubscribe, { authData, subscribeData: { id: 'wh-9' } })).resolves.toEqual({ ok: true });
   });
-  test('perform unwraps the delivery and uses the delivery id for dedupe', async () => {
-    const out = await appTester(trig.perform, { authData, cleanedRequest: { id: 'ev-1', event: 'contact.created', created_at: '2026-09-05T10:00:00Z', data: contact } });
+  // Real contact deliveries carry the person under data.contact. Zaps are built
+  // from the flat sample, so perform must hand Zapier the same flat fields.
+  test('perform flattens data.contact and uses the delivery id for dedupe', async () => {
+    const out = await appTester(trig.perform, { authData, cleanedRequest: { id: 'ev-1', event: 'contact.created', created_at: '2026-09-05T10:00:00Z', data: { contact } } });
     expect(out).toEqual([{ ...contact, event_id: 'ev-1', event_at: '2026-09-05T10:00:00Z' }]);
+    expect(out[0].email).toBe(contact.email);
+    expect(out[0]).not.toHaveProperty('contact');
   });
   test('perform ignores a delivery for another event', async () => {
-    await expect(appTester(trig.perform, { authData, cleanedRequest: { id: 'ev-2', event: 'contact.updated', data: contact } })).resolves.toEqual([]);
+    await expect(appTester(trig.perform, { authData, cleanedRequest: { id: 'ev-2', event: 'contact.updated', data: { contact } } })).resolves.toEqual([]);
   });
-  test('list-member trigger filters by the chosen list', async () => {
+  test('list-member trigger filters by the chosen list and keeps the list beside the contact', async () => {
     const op = App.triggers.new_list_member.operation;
-    const delivery = { id: 'ev-3', event: 'contact.list_joined', data: { ...contact, list: { id: 'L1', name: 'News' } } };
+    const delivery = { id: 'ev-3', event: 'contact.list_joined', data: { contact, list: { id: 'L1', name: 'News' } } };
     await expect(appTester(op.perform, { authData, inputData: { list_id: 'L2' }, cleanedRequest: delivery })).resolves.toEqual([]);
     const kept = await appTester(op.perform, { authData, inputData: { list_id: 'L1' }, cleanedRequest: delivery });
     expect(kept).toHaveLength(1);
+    expect(kept[0]).toMatchObject({ email: contact.email, list: { id: 'L1', name: 'News' }, event_id: 'ev-3' });
+  });
+  test('a form submission, already flat, passes through unchanged', async () => {
+    const op = App.triggers.form_submission.operation;
+    const data = { form_id: 'f-1', form_name: 'Signup', form_kind: 'signup', submission_id: 's-1', email: 'ada@example.com', fields: {} };
+    const out = await appTester(op.perform, { authData, inputData: {}, cleanedRequest: { id: 'ev-4', event: 'form.submitted', created_at: '2026-09-05T10:00:00Z', data } });
+    expect(out).toEqual([{ ...data, event_id: 'ev-4', event_at: '2026-09-05T10:00:00Z' }]);
   });
   test('form trigger filters by form id case-insensitively', async () => {
     const op = App.triggers.form_submission.operation;

@@ -1,0 +1,37 @@
+name: Push to Zapier
+
+# Uploads the app to Zapier as a private version. Run it by hand from the
+# Actions tab after bumping `version` in package.json.
+#
+# Needs, in this repository's settings:
+#   - secret   ZAPIER_DEPLOY_KEY  (developer.zapier.com → Settings → Deploy Keys)
+#   - variable ZAPIER_APP_ID      (the integration's numeric ID in the developer platform)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run validate
+      - name: Point the CLI at the app
+        env:
+          ZAPIER_APP_ID: ${{ vars.ZAPIER_APP_ID }}
+        run: |
+          test -n "$ZAPIER_APP_ID" || { echo "Set the ZAPIER_APP_ID repository variable first."; exit 1; }
+          printf '{ "id": %s, "key": "App%s" }\n' "$ZAPIER_APP_ID" "$ZAPIER_APP_ID" > .zapierapprc
+      - name: Push
+        env:
+          ZAPIER_DEPLOY_KEY: ${{ secrets.ZAPIER_DEPLOY_KEY }}
+        run: npx zapier-platform push
