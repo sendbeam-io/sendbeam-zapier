@@ -6,7 +6,7 @@ const nock = require('nock');
 const zapier = require('zapier-platform-core');
 const App = require('../index');
 const pkg = require('../package.json');
-const { EVENTS } = require('../src/triggers');
+const { EVENTS, HIDDEN_EVENTS } = require('../src/triggers');
 
 const appTester = zapier.createAppTester(App);
 const API = 'https://sendbeam.io';
@@ -50,10 +50,11 @@ describe('authentication', () => {
 });
 
 describe('the app', () => {
-  test('is version 1.2.0 with 19 triggers, 17 actions and 5 searches', () => {
-    expect(App.version).toBe('1.2.0');
-    expect(pkg.version).toBe('1.2.0');
-    expect(Object.keys(App.triggers)).toHaveLength(19);
+  test('is version 1.2.1 with 19 triggers (and 2 hidden), 17 actions and 5 searches', () => {
+    expect(App.version).toBe('1.2.1');
+    expect(pkg.version).toBe('1.2.1');
+    expect(Object.values(App.triggers).filter((t) => !t.display.hidden)).toHaveLength(19);
+    expect(Object.values(App.triggers).filter((t) => t.display.hidden).map((t) => t.key).sort()).toEqual(['domain_failed', 'domain_verified']);
     expect(Object.keys(App.creates)).toHaveLength(17);
     expect(Object.keys(App.searches)).toHaveLength(5);
     expect(Object.keys(App.resources).sort()).toEqual(['automation', 'campaign', 'form', 'list', 'segment', 'tag']);
@@ -113,10 +114,11 @@ describe('the app', () => {
 });
 
 describe('instant triggers', () => {
-  test('there is one trigger per SendBeam event', () => {
-    expect(Object.keys(App.triggers).sort()).toEqual(Object.keys(EVENTS).sort());
+  test('there is one trigger per SendBeam event, the sending-domain ones hidden', () => {
+    expect(Object.keys(App.triggers).sort()).toEqual([...Object.keys(EVENTS), ...Object.keys(HIDDEN_EVENTS)].sort());
     expect(new Set(Object.values(EVENTS)).size).toBe(19);
     expect(Object.values(EVENTS).filter((e) => e.startsWith('domain.'))).toEqual([]);
+    expect(Object.keys(HIDDEN_EVENTS).filter((k) => !App.triggers[k].display.hidden)).toEqual([]);
   });
 
   describe.each(Object.entries(EVENTS))('%s', (key, event) => {

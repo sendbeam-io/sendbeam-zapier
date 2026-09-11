@@ -17,6 +17,7 @@ const IDS = {
   workspace: '1a2b3c4d-5555-4666-8777-888899990000',
   automation: 'f6e5d4c3-b2a1-4f0e-9d8c-7b6a5f4e3d2c',
   segment: '4b5c6d7e-6666-4777-8888-9999aaaabbbb',
+  domain: '7e8f9a0b-3333-4444-8555-666677778888',
 };
 const AT = '2026-09-05T09:12:00.000Z';
 const EVENT_AT = '2026-09-05T09:12:04.000Z';

@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * One instant trigger per SendBeam webhook event, apart from the sending-domain
- * events. The event list must match SendBeam's own (test/contract.test.js
+ * One instant trigger per SendBeam webhook event; the sending-domain ones are
+ * hidden. The event list must match SendBeam's own (test/contract.test.js
  * checks it against the API description).
  */
 
@@ -279,8 +279,8 @@ const triggers = [
     event: 'email.complained',
     label: 'Email Complained',
     description: 'Triggers when a recipient marks an email as spam.',
-    extra: { ...occurred, reason: 'abuse' },
-    extraFields: [...occurredField, { key: 'reason', label: 'Reason' }],
+    extra: occurred,
+    extraFields: occurredField,
   }),
   makeHookTrigger({
     key: 'campaign_sent',
@@ -337,9 +337,49 @@ const triggers = [
       ...s.eventOutputFields,
     ],
   }),
+  // Kept, hidden, for Zaps built on 1.1.0: Zapier does not allow a version to
+  // drop a trigger that an earlier one had. New Zaps cannot choose them.
+  makeHookTrigger({
+    key: 'domain_verified',
+    noun: 'Sending Domain',
+    label: 'Domain Verified',
+    description: 'Triggers when a sending domain finishes verification and is ready to send.',
+    event: 'domain.verified',
+    hidden: true,
+    sample: s.withEvent({ domain_id: s.IDS.domain, domain: 'mail.example.com', workspace_id: s.IDS.workspace, verified_at: s.EVENT_AT }, 'ev_domain_verified'),
+    outputFields: [
+      { key: 'domain_id', label: 'Domain ID' },
+      { key: 'domain', label: 'Domain' },
+      { key: 'workspace_id', label: 'Workspace ID' },
+      { key: 'verified_at', label: 'Verified At', type: 'datetime' },
+      ...s.eventOutputFields,
+    ],
+  }),
+  makeHookTrigger({
+    key: 'domain_failed',
+    noun: 'Sending Domain',
+    label: 'Domain Failed',
+    description: 'Triggers when a sending domain fails verification or its verification lapses.',
+    event: 'domain.failed',
+    hidden: true,
+    sample: s.withEvent({ domain_id: s.IDS.domain, domain: 'mail.example.com', workspace_id: s.IDS.workspace, reason: 'DNS verification failed. Check that every record is present and exact, then try again.' }, 'ev_domain_failed'),
+    outputFields: [
+      { key: 'domain_id', label: 'Domain ID' },
+      { key: 'domain', label: 'Domain' },
+      { key: 'workspace_id', label: 'Workspace ID' },
+      { key: 'reason', label: 'Reason' },
+      ...s.eventOutputFields,
+    ],
+  }),
 ];
 
-/** The SendBeam event behind each trigger key, for tests. */
+/** The hidden triggers' events, for tests. */
+const HIDDEN_EVENTS = {
+  domain_verified: 'domain.verified',
+  domain_failed: 'domain.failed',
+};
+
+/** The SendBeam event behind each visible trigger key, for tests. */
 const EVENTS = {
   new_contact: 'contact.created',
   contact_updated: 'contact.updated',
@@ -362,4 +402,4 @@ const EVENTS = {
   form_submission: 'form.submitted',
 };
 
-module.exports = { triggers, EVENTS, filters };
+module.exports = { triggers, EVENTS, HIDDEN_EVENTS, filters };

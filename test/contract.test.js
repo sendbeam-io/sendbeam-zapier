@@ -14,7 +14,7 @@
 const nock = require('nock');
 const zapier = require('zapier-platform-core');
 const App = require('../index');
-const { EVENTS } = require('../src/triggers');
+const { EVENTS, HIDDEN_EVENTS } = require('../src/triggers');
 
 const appTester = zapier.createAppTester(App);
 const SPEC_URL = process.env.SENDBEAM_OPENAPI_URL || 'https://sendbeam.io/openapi.json';
@@ -205,11 +205,12 @@ describe('against the published SendBeam API', () => {
     expect(problems).toEqual([]);
   });
 
-  // The sending-domain events are left to SendBeam's own webhooks.
+  // The sending-domain triggers are hidden; the rest can be chosen in a Zap.
   const triggerEvents = () => spec.components.schemas.WebhookEvent.enum.filter((e) => !e.startsWith('domain.')).sort();
 
   test('the triggers cover every event SendBeam sends, apart from the sending-domain ones', () => {
     expect(Object.values(EVENTS).sort()).toEqual(triggerEvents());
+    expect([...Object.values(EVENTS), ...Object.values(HIDDEN_EVENTS)].sort()).toEqual([...spec.components.schemas.WebhookEvent.enum].sort());
   });
 
   test('recent events can be read for every trigger, in the shape a delivery arrives in', () => {
@@ -230,6 +231,6 @@ describe('against the published SendBeam API', () => {
       await appTester(trigger.operation.performSubscribe, { authData, inputData: {}, targetUrl: 'https://hooks.zapier.com/hooks/standard/1/abc/' });
       sent.push(...calls[0].body.event_types);
     }
-    expect(sent.sort()).toEqual(triggerEvents());
+    expect(sent.sort()).toEqual([...spec.components.schemas.WebhookEvent.enum].sort());
   });
 });

@@ -38,7 +38,7 @@ const toItem = (event, body) => {
  * `fallback` lists records the workspace already holds, in the shape of the
  * event, for testing the trigger before any event of its type is recorded.
  */
-const makeHookTrigger = ({ key, noun, label, description, event, sample, outputFields, filter, fallback }) => {
+const makeHookTrigger = ({ key, noun, label, description, event, sample, outputFields, filter, fallback, hidden }) => {
   // SendBeam IDs are lowercase UUIDs; a pasted ID may not be.
   const chosen = (bundle) => (filter ? String((bundle.inputData || {})[filter.key] || '').trim().toLowerCase() : '');
   const wanted = (bundle, item) => {
@@ -52,7 +52,7 @@ const makeHookTrigger = ({ key, noun, label, description, event, sample, outputF
   return {
     key,
     noun,
-    display: { label, description },
+    display: hidden ? { label, description, hidden: true } : { label, description },
     operation: {
       type: 'hook',
       inputFields,
