@@ -3,6 +3,14 @@
 Notable changes to the SendBeam app for Zapier. The versions here are the versions uploaded to Zapier; existing
 Zaps are moved to each new one.
 
+## 1.3.0 — unreleased
+
+### Added
+
+- **Campaign Paused** and **Campaign Resumed** triggers: SendBeam can now pause a campaign that is sending and resume
+  it later. Both can be limited to one campaign.
+- **Find Campaigns** can filter by the new **Paused** status.
+
 ## 1.2.1 — 2026-09-11
 
 ### Fixed

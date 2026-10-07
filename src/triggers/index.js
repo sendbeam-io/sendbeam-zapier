@@ -302,6 +302,39 @@ const triggers = [
     ],
   }),
   makeHookTrigger({
+    key: 'campaign_paused',
+    noun: 'Campaign',
+    label: 'Campaign Paused',
+    description: 'Triggers when a campaign that was sending is paused, optionally only one particular campaign. Everyone it reached keeps it; the rest wait until it is resumed or stopped.',
+    event: 'campaign.paused',
+    filter: filters.campaign,
+    sample: s.withEvent({ campaign_id: s.IDS.campaign, name: 'September newsletter', paused_at: s.EVENT_AT, sent: 1200, remaining: 634 }, 'ev_campaign_paused'),
+    outputFields: [
+      { key: 'campaign_id', label: 'Campaign ID' },
+      { key: 'name', label: 'Name' },
+      { key: 'paused_at', label: 'Paused At', type: 'datetime' },
+      { key: 'sent', label: 'Sent So Far', type: 'integer' },
+      { key: 'remaining', label: 'Waiting', type: 'integer' },
+      ...s.eventOutputFields,
+    ],
+  }),
+  makeHookTrigger({
+    key: 'campaign_resumed',
+    noun: 'Campaign',
+    label: 'Campaign Resumed',
+    description: 'Triggers when a paused campaign starts sending again, optionally only one particular campaign.',
+    event: 'campaign.resumed',
+    filter: filters.campaign,
+    sample: s.withEvent({ campaign_id: s.IDS.campaign, name: 'September newsletter', resumed_at: s.EVENT_AT, remaining: 634 }, 'ev_campaign_resumed'),
+    outputFields: [
+      { key: 'campaign_id', label: 'Campaign ID' },
+      { key: 'name', label: 'Name' },
+      { key: 'resumed_at', label: 'Resumed At', type: 'datetime' },
+      { key: 'remaining', label: 'Waiting', type: 'integer' },
+      ...s.eventOutputFields,
+    ],
+  }),
+  makeHookTrigger({
     key: 'form_submission',
     noun: 'Form Submission',
     label: 'New Form Submission',
@@ -399,6 +432,8 @@ const EVENTS = {
   email_bounced: 'email.bounced',
   email_complained: 'email.complained',
   campaign_sent: 'campaign.sent',
+  campaign_paused: 'campaign.paused',
+  campaign_resumed: 'campaign.resumed',
   form_submission: 'form.submitted',
 };
 

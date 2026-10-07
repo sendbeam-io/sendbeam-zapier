@@ -50,10 +50,10 @@ describe('authentication', () => {
 });
 
 describe('the app', () => {
-  test('is version 1.2.1 with 19 triggers (and 2 hidden), 17 actions and 5 searches', () => {
-    expect(App.version).toBe('1.2.1');
-    expect(pkg.version).toBe('1.2.1');
-    expect(Object.values(App.triggers).filter((t) => !t.display.hidden)).toHaveLength(19);
+  test('is version 1.3.0 with 21 triggers (and 2 hidden), 17 actions and 5 searches', () => {
+    expect(App.version).toBe('1.3.0');
+    expect(pkg.version).toBe('1.3.0');
+    expect(Object.values(App.triggers).filter((t) => !t.display.hidden)).toHaveLength(21);
     expect(Object.values(App.triggers).filter((t) => t.display.hidden).map((t) => t.key).sort()).toEqual(['domain_failed', 'domain_verified']);
     expect(Object.keys(App.creates)).toHaveLength(17);
     expect(Object.keys(App.searches)).toHaveLength(5);
@@ -116,7 +116,7 @@ describe('the app', () => {
 describe('instant triggers', () => {
   test('there is one trigger per SendBeam event, the sending-domain ones hidden', () => {
     expect(Object.keys(App.triggers).sort()).toEqual([...Object.keys(EVENTS), ...Object.keys(HIDDEN_EVENTS)].sort());
-    expect(new Set(Object.values(EVENTS)).size).toBe(19);
+    expect(new Set(Object.values(EVENTS)).size).toBe(21);
     expect(Object.values(EVENTS).filter((e) => e.startsWith('domain.'))).toEqual([]);
     expect(Object.keys(HIDDEN_EVENTS).filter((k) => !App.triggers[k].display.hidden)).toEqual([]);
   });
@@ -179,6 +179,8 @@ describe('instant triggers', () => {
     email_bounced: ['campaign_id', 'campaign_ids', (s) => s.campaign_id],
     email_complained: ['campaign_id', 'campaign_ids', (s) => s.campaign_id],
     campaign_sent: ['campaign_id', 'campaign_ids', (s) => s.campaign_id],
+    campaign_paused: ['campaign_id', 'campaign_ids', (s) => s.campaign_id],
+    campaign_resumed: ['campaign_id', 'campaign_ids', (s) => s.campaign_id],
     form_submission: ['form_id', 'form_ids', (s) => s.form_id],
   };
 

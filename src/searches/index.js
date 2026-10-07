@@ -79,6 +79,7 @@ const find_campaign = {
           { value: 'draft', label: 'Draft', sample: 'draft' },
           { value: 'scheduled', label: 'Scheduled', sample: 'scheduled' },
           { value: 'sending', label: 'Sending', sample: 'sending' },
+          { value: 'paused', label: 'Paused', sample: 'paused' },
           { value: 'sent', label: 'Sent', sample: 'sent' },
           { value: 'cancelled', label: 'Cancelled', sample: 'cancelled' },
         ],
